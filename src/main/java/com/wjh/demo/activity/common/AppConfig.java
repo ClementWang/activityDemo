@@ -1,4 +1,4 @@
-package com.wjh.demo.activity;
+package com.wjh.demo.activity.common;
 
 import java.util.Arrays;
 import java.util.List;

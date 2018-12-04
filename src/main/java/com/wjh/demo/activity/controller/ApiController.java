@@ -1,110 +1,68 @@
 package com.wjh.demo.activity.controller;
 
-import java.util.List;
-import java.util.stream.Collectors;
-
 import javax.annotation.security.RolesAllowed;
 
-import org.activiti.engine.RepositoryService;
-import org.activiti.engine.RuntimeService;
-import org.activiti.engine.TaskService;
-import org.activiti.engine.impl.util.json.JSONArray;
-import org.activiti.engine.impl.util.json.JSONObject;
-import org.activiti.engine.repository.ProcessDefinition;
-import org.activiti.engine.runtime.ProcessInstance;
-import org.activiti.engine.task.Task;
+import org.activiti.api.process.model.ProcessDefinition;
+import org.activiti.api.process.model.ProcessInstance;
+import org.activiti.api.process.model.builders.StartProcessPayloadBuilder;
+import org.activiti.api.process.runtime.ProcessRuntime;
+import org.activiti.api.runtime.shared.query.Page;
+import org.activiti.api.runtime.shared.query.Pageable;
+import org.activiti.api.task.model.Task;
+import org.activiti.api.task.model.builders.ClaimTaskPayloadBuilder;
+import org.activiti.api.task.model.builders.CompleteTaskPayloadBuilder;
+import org.activiti.api.task.runtime.TaskRuntime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.wjh.demo.activity.common.UserUtil;
 
 @RolesAllowed("ROLE_ACTIVITI_USER")
 @RestController
+@RequestMapping("/api")
 public class ApiController {
+    private Logger logger = LoggerFactory.getLogger(ApiController.class);
+
     @Autowired
-    private RepositoryService repositoryService;
+    private ProcessRuntime processRuntime;
     @Autowired
-    private RuntimeService runtimeService;
-    @Autowired
-    private TaskService taskService;
+    private TaskRuntime taskRuntime;
 
     @GetMapping("/processDefines")
-    public String getProcessDefines() {
-        List<ProcessDefinition> list = repositoryService.createProcessDefinitionQuery().list();
-        JSONArray proDefines = new JSONArray();
-        list.forEach(item -> {
-            JSONObject proDefine = new JSONObject();
-            proDefine.put("id", item.getId());
-            proDefine.put("name", item.getName());
-            proDefine.put("key", item.getKey());
-            proDefine.put("description", item.getDescription());
-            proDefine.put("version", item.getVersion());
-            proDefines.put(proDefine);
-        });
-        return proDefines.toString();
+    public Page<ProcessDefinition> processDefines() {
+        return processRuntime.processDefinitions(Pageable.of(0, 10));
     }
 
-    @GetMapping("/startProcess/{key}")
-    public void createProcess(@PathVariable("key") String key) {
-        ProcessInstance instance = runtimeService.startProcessInstanceByKey(key);
-        System.out.println(instance);
-    }
-
-    @GetMapping("/tasks/unAssignee")
-    public String getTasksUnAssignee() {
-        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal();
-        List<String> groups = userDetails.getAuthorities().stream()
-                .map(item -> item.getAuthority()).collect(Collectors.toList());
-        System.out.println(groups);
-        List<Task> tasks = taskService.createTaskQuery().taskInvolvedGroupsIn(groups).list();
-        JSONArray taskArray = new JSONArray();
-        tasks.forEach(item -> {
-            JSONObject taskJson = new JSONObject();
-            taskJson.put("id", item.getId());
-            taskJson.put("name", item.getName());
-            taskJson.put("description", item.getDescription());
-            taskJson.put("owner", item.getOwner());
-            taskJson.put("assignee", item.getAssignee());
-            taskJson.put("ClaimTime", item.getClaimTime());
-            taskArray.put(taskJson);
-        });
-        return taskArray.toString();
-    }
-
-    @GetMapping("/task/{id}/claim")
-    public void claimTask(@PathVariable("id") String taskId) {
-        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal();
-        taskService.claim(taskId, userDetails.getUsername());
+    @PostMapping("/startProcess/{key}")
+    public void startProcess(@PathVariable("key") String key) {
+        String currentUser = UserUtil.currentUserName();
+        ProcessInstance instance = processRuntime.start(new StartProcessPayloadBuilder()
+                .withVariable("currentLoginUser", currentUser)
+                .withProcessDefinitionKey(key)
+                .build());
+        logger.debug(instance.toString());
     }
 
     @GetMapping("/tasks")
-    public String getTasks() {
-        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal();
-        String userName = userDetails.getUsername();
-        List<Task> tasks = taskService.createTaskQuery().taskAssignee(userName).list();
-        JSONArray taskArray = new JSONArray();
-        tasks.forEach(item -> {
-            JSONObject taskJson = new JSONObject();
-            taskJson.put("id", item.getId());
-            taskJson.put("name", item.getName());
-            taskJson.put("description", item.getDescription());
-            taskJson.put("owner", item.getOwner());
-            taskJson.put("assignee", item.getAssignee());
-            taskJson.put("ClaimTime", item.getClaimTime());
-            taskArray.put(taskJson);
-        });
-        return taskArray.toString();
+    public Page<Task> tasks() {
+        return taskRuntime.tasks(Pageable.of(0, 10));
     }
 
-    @GetMapping("/task/{id}/complete")
+    @PostMapping("/task/{id}/claim")
+    public void claimTask(@PathVariable("id") String taskId) {
+        Task task = taskRuntime.claim(new ClaimTaskPayloadBuilder().withTaskId(taskId).build());
+        logger.debug(task.toString());
+    }
+
+    @PostMapping("/task/{id}/complete")
     public void completeTask(@PathVariable("id") String taskId) {
-        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
-        taskService.addComment(taskId, task.getProcessInstanceId(), "批准");
-        taskService.complete(taskId);
+        Task task = taskRuntime.complete(new CompleteTaskPayloadBuilder().withTaskId(taskId).build());
+        logger.debug(task.toString());
     }
 }
