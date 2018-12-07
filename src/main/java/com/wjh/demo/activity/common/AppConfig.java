@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -21,17 +22,14 @@ public class AppConfig {
     private Logger logger = LoggerFactory.getLogger(AppConfig.class);
 
     @Bean
+    @ConditionalOnProperty(prefix = "app.config", name = "use-momory-datasource")
     public UserDetailsService myUserDetailsService() {
-
+        logger.debug("Using memory database...");
         InMemoryUserDetailsManager inMemoryUserDetailsManager = new InMemoryUserDetailsManager();
 
-        String[][] usersGroupsAndRoles = {
-                {"clement", "123qwe", "ROLE_ACTIVITI_USER"},
-                {"leo", "123qwe", "ROLE_ACTIVITI_USER", "GROUP_PM"},
-                {"tank", "123qwe", "ROLE_ACTIVITI_USER", "GROUP_DM"},
-                {"test", "123qwe", "ROLE_ACTIVITI_USER"},
-                {"admin", "admin", "ROLE_ACTIVITI_ADMIN"},
-        };
+        String[][] usersGroupsAndRoles = { { "clement", "123qwe", "ROLE_ACTIVITI_USER" },
+                { "leo", "123qwe", "ROLE_ACTIVITI_USER", "GROUP_PM" }, { "tank", "123qwe", "ROLE_ACTIVITI_USER", "GROUP_DM" },
+                { "test", "123qwe", "ROLE_ACTIVITI_USER" }, { "admin", "admin", "ROLE_ACTIVITI_ADMIN" }, };
 
         for (String[] user : usersGroupsAndRoles) {
             List<String> authoritiesStrings = Arrays.asList(Arrays.copyOfRange(user, 2, user.length));
